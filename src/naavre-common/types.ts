@@ -64,4 +64,15 @@ export namespace NaaVRECatalogue {
       is_draft?: boolean;
     }
   }
+  export namespace CondaEnvironments {
+    export interface ICondaEnvironment extends BaseAssets.IBaseAsset {
+      url?: string;
+      environment_name: string;
+      python_version?: string;
+      package_count?: number;
+      created_date?: string | null;
+      environment_file?: string | null;
+      dependency_list?: string | null;
+    }
+  }
 }

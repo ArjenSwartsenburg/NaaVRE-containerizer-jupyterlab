@@ -57,6 +57,8 @@ interface IExtractorError {
 interface IState {
   baseImageSelected: boolean;
   baseImages: any[];
+  environments: NaaVRECatalogue.CondaEnvironments.ICondaEnvironment[];
+  selectedEnvironment: NaaVRECatalogue.CondaEnvironments.ICondaEnvironment | null;
   cellAnalyzed: boolean;
   currentCell: NaaVRECatalogue.WorkflowCells.ICell;
   extractorError: string | IExtractorError;
@@ -70,6 +72,8 @@ interface IState {
 const DefaultState: IState = {
   baseImageSelected: false,
   baseImages: [],
+  environments: [],
+  selectedEnvironment: null,
   cellAnalyzed: false,
   currentCell: DefaultCell,
   extractorError: '',
@@ -116,9 +120,30 @@ export class CellTracker extends React.Component<IProps, IState> {
       });
   };
 
+  loadEnvironments = async () => {
+    NaaVREExternalService(
+      'GET',
+      `${this.props.settings.catalogueServiceUrl}/conda-environments/?virtual_lab=${this.props.settings.virtualLab}`
+    )
+      .then(resp => {
+        if (resp.status_code !== 200) {
+          throw `${resp.status_code} ${resp.reason}`;
+        }
+        return JSON.parse(resp.content);
+      })
+      .then(data => {
+        const results = Array.isArray(data) ? data : data.results || [];
+        this.setState({ environments: results });
+      })
+      .catch(reason => {
+        console.log(`Could not retrieve environments: ${reason}`);
+      });
+  };
+
   resetState = () => {
     const newState = DefaultState;
     newState.baseImages = this.state.baseImages;
+    newState.environments = this.state.environments;
     this.setState(newState);
     if (this.cellPreviewRef.current !== null) {
       this.cellPreviewRef.current.updateChart(emptyChart);
@@ -143,7 +168,7 @@ export class CellTracker extends React.Component<IProps, IState> {
         virtual_lab: this.props.settings.virtualLab || undefined
       }
     });
-    await this.loadBaseImages();
+    await Promise.all([this.loadBaseImages(), this.loadEnvironments()]);
     if (this.props.notebook) {
       this.connectAndInitWhenReady(this.props.notebook);
     }
@@ -376,6 +401,12 @@ export class CellTracker extends React.Component<IProps, IState> {
     });
   };
 
+  updateEnvironment = (
+    value: NaaVRECatalogue.CondaEnvironments.ICondaEnvironment | null
+  ) => {
+    this.setState({ selectedEnvironment: value });
+  };
+
   allTypesSelected = () => {
     if (Object.values(this.state.typeSelections).length > 0) {
       return Object.values(this.state.typeSelections).reduce((prev, curr) => {
@@ -385,12 +416,41 @@ export class CellTracker extends React.Component<IProps, IState> {
     return false;
   };
 
+  fetchEnvironmentDownloadUrl = async (
+    env: NaaVRECatalogue.CondaEnvironments.ICondaEnvironment
+  ): Promise<string | null> => {
+    if (!env.id) {
+      return null;
+    }
+    try {
+      const resp = await NaaVREExternalService(
+        'GET',
+        `${this.props.settings.catalogueServiceUrl}/conda-environments/${env.id}/download-url/`
+      );
+      if (resp.status_code !== 200) {
+        throw `${resp.status_code} ${resp.reason}`;
+      }
+      const data = JSON.parse(resp.content);
+      return data.url || null;
+    } catch (reason) {
+      console.log(`Could not retrieve environment download URL: ${reason}`);
+      return null;
+    }
+  };
+
   onContainerize = async () => {
+    let environmentUrl: string | null = null;
+    if (this.state.selectedEnvironment) {
+      environmentUrl = await this.fetchEnvironmentDownloadUrl(
+        this.state.selectedEnvironment
+      );
+    }
     await createCell(
       this.state.currentCell,
       this.props.settings,
       this.state.forceContainerize,
-      this.state.createDraft
+      this.state.createDraft,
+      environmentUrl
     );
   };
 
@@ -542,6 +602,20 @@ export class CellTracker extends React.Component<IProps, IState> {
                       renderInput={params => <TextField {...params} />}
                     />
                   </div>
+                  <div>
+                    <p>Environment</p>
+                    <Autocomplete
+                      getOptionLabel={option => option.environment_name}
+                      options={this.state.environments}
+                      disablePortal
+                      value={this.state.selectedEnvironment}
+                      onChange={(_event, newValue) => {
+                        this.updateEnvironment(newValue);
+                      }}
+                      id="combo-box-environment"
+                      renderInput={params => <TextField {...params} />}
+                    />
+                  </div>
                   <Stack direction="column" spacing={0}>
                     <Tooltip title="Build the container image, even if the cell hasn't changed and the image already exists">
                       <FormControlLabel
@@ -587,7 +661,9 @@ export class CellTracker extends React.Component<IProps, IState> {
                       disabled={
                         !this.allTypesSelected() ||
                         !(
-                          this.state.createDraft || this.state.baseImageSelected
+                          this.state.createDraft ||
+                          (this.state.baseImageSelected &&
+                            this.state.selectedEnvironment !== null)
                         ) ||
                         this.state.loading
                       }

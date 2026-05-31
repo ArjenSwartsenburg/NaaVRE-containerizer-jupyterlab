@@ -56,7 +56,8 @@ declare type CatalogueResponse = {
 async function callContainerizeAPI(
   cell: NaaVRECatalogue.WorkflowCells.ICell,
   forceContainerize: boolean,
-  settings: IVREPanelSettings
+  settings: IVREPanelSettings,
+  environmentUrl: string | null
 ) {
   const resp = await NaaVREExternalService(
     'POST',
@@ -65,7 +66,8 @@ async function callContainerizeAPI(
     {
       virtual_lab: settings.virtualLab || undefined,
       cell: cell,
-      force_containerize: forceContainerize
+      force_containerize: forceContainerize,
+      environment_url: environmentUrl || undefined
     }
   );
   if (resp.status_code !== 200) {
@@ -191,14 +193,16 @@ async function createCellContainer(
   cell: NaaVRECatalogue.WorkflowCells.ICell,
   settings: IVREPanelSettings,
   forceContainerize: boolean,
-  notificationId: string
+  notificationId: string,
+  environmentUrl: string | null
 ): Promise<ContainerizeResponse | null> {
   let containerizeResponse: ContainerizeResponse;
   try {
     containerizeResponse = await callContainerizeAPI(
       cell,
       forceContainerize,
-      settings
+      settings,
+      environmentUrl
     );
     console.debug('containerizeResponse', containerizeResponse);
   } catch {
@@ -358,7 +362,8 @@ export async function createCell(
   cell: NaaVRECatalogue.WorkflowCells.ICell,
   settings: IVREPanelSettings,
   forceContainerize: boolean,
-  createDraft: boolean
+  createDraft: boolean,
+  environmentUrl: string | null = null
 ) {
   const notificationId = Notification.emit(
     createDraft
@@ -372,7 +377,8 @@ export async function createCell(
       cell,
       settings,
       forceContainerize,
-      notificationId
+      notificationId,
+      environmentUrl
     );
     if (containerizeResponse === null) {
       return;
