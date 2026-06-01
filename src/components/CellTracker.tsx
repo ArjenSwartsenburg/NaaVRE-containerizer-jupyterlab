@@ -116,7 +116,7 @@ export class CellTracker extends React.Component<IProps, IState> {
   loadEnvironments = async () => {
     NaaVREExternalService(
       'GET',
-      `${this.props.settings.catalogueServiceUrl}/conda-environments/?virtual_lab=${this.props.settings.virtualLab}`
+      `${this.props.settings.catalogueServiceUrl}/conda-environments/`
     )
       .then(resp => {
         if (resp.status_code !== 200) {
@@ -378,7 +378,7 @@ export class CellTracker extends React.Component<IProps, IState> {
         return prev && curr;
       });
     }
-    return false;
+    return true;
   };
 
   fetchEnvironmentDownloadUrl = async (
