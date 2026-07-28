@@ -123,7 +123,11 @@ export class CellTracker extends React.Component<IProps, IState> {
   loadEnvironments = async () => {
     NaaVREExternalService(
       'GET',
-      `${this.props.settings.catalogueServiceUrl}/conda-environments/?virtual_lab=${this.props.settings.virtualLab}`
+      // shared_with_me widens the queryset to owned *and* shared
+      // environments; without it a user sees only their own, so an
+      // environment shared with them cannot be containerized.
+      `${this.props.settings.catalogueServiceUrl}/conda-environments/` +
+        `?virtual_lab=${this.props.settings.virtualLab}&shared_with_me=true`
     )
       .then(resp => {
         if (resp.status_code !== 200) {
@@ -145,6 +149,9 @@ export class CellTracker extends React.Component<IProps, IState> {
     newState.baseImages = this.state.baseImages;
     newState.environments = this.state.environments;
     this.setState(newState);
+    // Environments are created while the panel is open, so refresh the list
+    // on cell changes rather than only when the panel first mounts.
+    this.loadEnvironments();
     if (this.cellPreviewRef.current !== null) {
       this.cellPreviewRef.current.updateChart(emptyChart);
     }
